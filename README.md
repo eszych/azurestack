@@ -195,8 +195,6 @@ Use the following switches to skip deployment of additional Resource Providers, 
 * Use **-skipAppService** to **not** install the App Service pre-requisites and App Service Resource Provider.
 * Use **-skipCustomizeAsdkHost** to **not** customize your ASDK host with useful apps such as Putty, Visual Studio Code, Google Chrome and more.
 
-In addition, you can choose to skip a particular resource provider deployment, such as -skipMySQL, but later, re-run the Configurator (using the same launch command) and **not** specify the -skipMySQL switch, and the Configurator will add that particular functionality.
-
 Post-Script Actions
 -------------------
 This script can take many hours to finish, depending on your hardware and download speeds. There are no specific post-script actions to perform after the script has finished.
