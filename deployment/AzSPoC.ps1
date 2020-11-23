@@ -622,15 +622,16 @@ try {
         $ubuntuNetTest = Test-NetConnection cloud-images.ubuntu.com -CommonTCPPort HTTP -InformationLevel Quiet
         $catalogNetTest = Test-NetConnection www.catalog.update.microsoft.com -CommonTCPPort HTTP -InformationLevel Quiet
         $microsoftNetTest = Test-NetConnection microsoft.com -CommonTCPPort HTTP -InformationLevel Quiet
-        $chocolateyNetTest = Test-NetConnection chocolatey.org -CommonTCPPort HTTP -InformationLevel Quiet
+        # $chocolateyNetTest = Test-NetConnection chocolatey.org -CommonTCPPort HTTP -InformationLevel Quiet
         Write-CustomVerbose -Message "Connection to Azure: $azureNetTest"
         Write-CustomVerbose -Message "Connection to Microsoft.com: $microsoftNetTest"
         Write-CustomVerbose -Message "Connection to Microsoft Update Catalog: $catalogNetTest"
         Write-CustomVerbose -Message "Connection to GitHub: $gitHubNetTest"
         Write-CustomVerbose -Message "Connection to Ubuntu's Image Repo: $ubuntuNetTest"
-        Write-CustomVerbose -Message "Connection to Chocolatey: $chocolateyNetTest"
+        # Write-CustomVerbose -Message "Connection to Chocolatey: $chocolateyNetTest"
 
-        if ($azureNetTest -and $gitHubNetTest -and $ubuntuNetTest -and $catalogNetTest -and $microsoftNetTest -and $chocolateyNetTest) {
+        # if ($azureNetTest -and $gitHubNetTest -and $ubuntuNetTest -and $catalogNetTest -and $microsoftNetTest -and $chocolateyNetTest) {
+        if ($azureNetTest -and $gitHubNetTest -and $ubuntuNetTest -and $catalogNetTest -and $microsoftNetTest) {
             Write-CustomVerbose -Message "All internet connectivity tests passed"
             $validOnlineInstall = $true
         }
@@ -1698,6 +1699,10 @@ try {
     #############################################################################################################################################################
 
     $scriptStep = "VALIDATE 2016 ISO"
+
+    <#############################################################################################################################################################
+    ### No need to validate ISO Files - VM-Images will be downloaded from Azure Marketplace 
+
     try {
         Write-CustomVerbose -Message "Validating Windows Server 2016 RTM ISO path"
         # If this deployment is PartialOnline/Offline and using the Zip, we need to search for the ISO
@@ -1760,7 +1765,7 @@ try {
     # Do a quick check of the extracted zip file (if it exists) to check if there's a 2019 ISO in there.
     # If this deployment is PartialOnline/Offline and using the Zip, we need to search for the ISO
     if (($AzSPoCOfflineZipPath) -and ($offlineZipIsValid = $true)) {
-        Write-Host "Looing in your Extracted ZIP file for a Windows Server 2019 ISO..."
+        Write-Host "Looking in your Extracted ZIP file for a Windows Server 2019 ISO..."
         if (Get-ChildItem -Path "$downloadPath\2019iso\*" -Recurse -Include *.iso -ErrorAction SilentlyContinue) {
             $ISOPath2019 = Get-ChildItem -Path "$downloadPath\2019iso\*" -Recurse -Include *.iso -ErrorAction Stop | ForEach-Object { $_.FullName }
             Write-Host "It looks like a Windows Server 2019 ISO has been found here: $ISOPath2019 - this will now be validated"
@@ -1824,6 +1829,8 @@ try {
             return
         }
     }
+
+    #############################################################################################################################################################>
 
     ### VALIDATE PS SCRIPTS LOCATION ############################################################################################################################
     #############################################################################################################################################################
@@ -2527,6 +2534,231 @@ C:\AzSPoC\AzSPoC.ps1, you should find the Scripts folder located at C:\AzSPoC\Sc
         return
     }
 
+    #### CUSTOMIZE ASDK HOST #####################################################################################################################################
+    ##############################################################################################################################################################
+
+    $progressStage = "InstallHostApps"
+    $progressCheck = CheckProgress -progressStage $progressStage
+    $scriptStep = $progressStage.ToUpper()
+
+    if (($multinode -eq $false)) {
+        if ($progressCheck -eq "Complete") {
+            Write-CustomVerbose -Message "Azure Stack POC Configurator Stage: $progressStage previously completed successfully"
+        }
+        elseif (!$skipCustomizeAsdkHost -and ($progressCheck -ne "Complete")) {
+            # We first need to check if in a previous run, this section was skipped, but now, the user wants to add this, so we need to reset the progress.
+            if ($progressCheck -eq "Skipped") {
+                StageReset
+            }
+            if (($progressCheck -eq "Incomplete") -or ($progressCheck -eq "Failed")) {
+                try {
+                    if ($deploymentMode -eq "Online") {
+                        <##########
+                        # Install useful ASDK Host Apps via Chocolatey
+                        Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+                        # Enable Choco Global Confirmation
+                        Write-CustomVerbose -Message "Enabling global confirmation to streamline installs"
+                        choco feature enable -n allowGlobalConfirmation
+                        # Add Choco to default path
+                        $testEnvPath = $Env:path
+                        if (!($testEnvPath -contains "$env:ProgramData\chocolatey\bin")) {
+                            $Env:path = $env:path + ";$env:ProgramData\chocolatey\bin"
+                        }
+                        # Visual Studio Code
+                        Write-CustomVerbose -Message "Installing VS Code with Chocolatey"
+                        choco install vscode -f
+                        # Putty
+                        Write-CustomVerbose -Message "Installing Putty with Chocolatey"
+                        choco install putty.install -f
+                        # WinSCP
+                        Write-CustomVerbose -Message "Installing WinSCP with Chocolatey"
+                        choco install winscp.install -f
+                        #Edge Insider Beta
+                        Write-CustomVerbose -Message "Installing Microsoft Edge"
+                        choco install microsoft-edge -f
+                        # Chrome
+                        #Write-CustomVerbose -Message "Installing Chrome with Chocolatey"
+                        choco install googlechrome -f
+                        # WinDirStat
+                        Write-CustomVerbose -Message "Installing WinDirStat with Chocolatey"
+                        choco install windirstat -f
+                        # Python
+                        Write-CustomVerbose -Message "Installing latest version of Python for Windows"
+                        choco install python3 --params "/InstallDir:C:\Python" -f
+                        ##########> 
+                        refreshenv
+                        # Set Environment Variables
+                        [System.Environment]::SetEnvironmentVariable("PATH", "$env:Path;C:\Python;C:\Python\Scripts", "Machine")
+                        [System.Environment]::SetEnvironmentVariable("PATH", "$env:Path;C:\Python;C:\Python\Scripts", "User")
+                        # Set Current Session Variable
+                        $testEnvPath = $Env:path
+                        if (!($testEnvPath -contains "C:\Python;C:\Python\Scripts")) {
+                            $Env:path = $env:path + ";C:\Python;C:\Python\Scripts"
+                        }
+                        Write-CustomVerbose -Message "Upgrading pip"
+                        python -m ensurepip --default-pip
+                        python -m pip install -U pip
+                        refreshenv
+                        Write-CustomVerbose -Message "Installing certifi"
+                        pip install certifi
+                        refreshenv
+                        # Azure CLI
+                        Write-CustomVerbose -Message "Installing latest version of Azure CLI with Chocolatey"
+                        choco install azure-cli
+                        refreshenv
+                    }
+                    elseif ($deploymentMode -ne "Online") {
+                        <##########
+                        $hostAppsPath = "$azsPath\hostapps"
+                        Set-Location $hostAppsPath
+                        # Visual Studio Code
+                        HostAppInstaller -localInstallPath "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe" -appName VSCode `
+                            -arguments '/SP /VERYSILENT /SUPPRESSMSGBOXES /LOG="vscode.log" /NOCANCEL /NORESTART /MERGETASKS=!runcode,addtopath,associatewithfiles,addcontextmenufolders,addcontextmenufiles,quicklaunchicon,desktopicon' `
+                            -fileName "vscode.exe" -appType "EXE"
+                        # Putty
+                        HostAppInstaller -localInstallPath "$env:ProgramFiles\PuTTY\putty.exe" -appName Putty `
+                            -arguments '/i putty.msi /qn /l*v "putty.log" ADDLOCAL=FilesFeature,DesktopFeature,PathFeature,PPKFeature' -fileName "putty.msi" -appType "MSI"
+                        # WinSCP
+                        HostAppInstaller -localInstallPath "$env:ProgramFiles\WinSCP\WinSCP.exe" -appName WinSCP `
+                            -arguments '/SP /VERYSILENT /SUPPRESSMSGBOXES /LOG="WinSCP.log" /NOCANCEL /NORESTART' -fileName "WinSCP.exe" -appType "EXE"
+                        # Chrome
+                        HostAppInstaller -localInstallPath "${Env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe" -appName "Google Chrome" `
+                            -arguments '/i googlechrome.msi /qn /l*v "googlechrome.log"' -fileName "googlechrome.msi" -appType "MSI"
+                        # WinDirStat
+                        HostAppInstaller -localInstallPath "${Env:ProgramFiles(x86)}\WinDirStat\WinDirStat.exe" -appName WinDirStat `
+                            -arguments '/S /VERYSILENT /SUPPRESSMSGBOXES /LOG="WinDirStat.log" /NOCANCEL /NORESTART' `
+                            -fileName "windirstat.exe" -appType "EXE"
+                        # Python
+                        HostAppInstaller -localInstallPath "C:\Python\Python.exe" -appName Python `
+                            -arguments '/quiet InstallAllUsers=1 PrependPath=1 TargetDir=c:\Python' -fileName "python3.exe" -appType "EXE"
+                        # Set Environment Variables
+                        [System.Environment]::SetEnvironmentVariable("PATH", "$env:Path;C:\Python;C:\Python\Scripts", "Machine")
+                        [System.Environment]::SetEnvironmentVariable("PATH", "$env:Path;C:\Python;C:\Python\Scripts", "User")
+                        # Set Current Session Variable
+                        $testEnvPath = $Env:path
+                        ##########>
+                        if (!($testEnvPath -contains "C:\Python;C:\Python\Scripts")) {
+                            $Env:path = $env:path + ";C:\Python;C:\Python\Scripts"
+                        }
+                        Write-CustomVerbose -Message "Upgrading pip"
+                        $pipWhl = (Get-ChildItem -Path .\* -Include "pip*.whl" -Force -Verbose -ErrorAction Stop).Name
+                        python -m pip install --no-index $pipWhl
+                        #python -m ensurepip --default-pip
+                        Write-CustomVerbose -Message "Installing certifi"
+                        # pip install certifi
+                        $certifiWhl = (Get-ChildItem -Path .\* -Include "certifi*.whl" -Force -Verbose -ErrorAction Stop).Name
+                        pip install --no-index $certifiWhl
+                        # Azure CLI
+                        HostAppInstaller -localInstallPath "${Env:ProgramFiles(x86)}\Microsoft SDKs\Azure\CLI2\wbin" -appName "Azure CLI" `
+                            -arguments '/i azurecli.msi /qn /norestart /l*v "azurecli.log"' -fileName "azurecli.msi" -appType "MSI"
+                    }
+
+                    # Configure Python & Azure CLI Certs
+                    Write-CustomVerbose -Message "Retrieving Azure Stack Root Authority certificate..." -Verbose
+                    $label = "AzureStackSelfSignedRootCert"
+                    $cert = Get-ChildItem Cert:\CurrentUser\Root | Where-Object Subject -eq "CN=$label" -ErrorAction SilentlyContinue | Select-Object -First 1
+                    if ($cert) {
+                        try {
+                            New-Item -Path "$env:userprofile\desktop\Certs" -ItemType Directory -Force | Out-Null
+                            $certFileName = "$env:computername" + "-CA.cer"
+                            $certFilePath = "$env:userprofile\desktop\Certs\$certFileName"
+                            Write-CustomVerbose -Message "Saving Azure Stack Root certificate in $certFilePath..." -Verbose
+                            Export-Certificate -Cert $cert -FilePath $certFilePath -Force | Out-Null
+                            Write-CustomVerbose -Message "Converting certificate to PEM format"
+                            Set-Location "$env:userprofile\desktop\Certs"
+                            $pemFileName = $certFileName -replace ".cer", ".pem"
+                            certutil.exe -encode $certFileName $pemFileName
+                            $pemFilePath = "$env:userprofile\desktop\Certs\$pemFileName"
+                            $root = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
+                            $root.Import($pemFilePath)
+                            Write-CustomVerbose -Message "Extracting required information from the cert file"
+                            $md5Hash = (Get-FileHash -Path $pemFilePath -Algorithm MD5).Hash.ToLower()
+                            $sha1Hash = (Get-FileHash -Path $pemFilePath -Algorithm SHA1).Hash.ToLower()
+                            $sha256Hash = (Get-FileHash -Path $pemFilePath -Algorithm SHA256).Hash.ToLower()
+                            $issuerEntry = [string]::Format("# Issuer: {0}", $root.Issuer)
+                            $subjectEntry = [string]::Format("# Subject: {0}", $root.Subject)
+                            $labelEntry = [string]::Format("# Label: {0}", $root.Subject.Split('=')[-1])
+                            $serialEntry = [string]::Format("# Serial: {0}", $root.GetSerialNumberString().ToLower())
+                            $md5Entry = [string]::Format("# MD5 Fingerprint: {0}", $md5Hash)
+                            $sha1Entry = [string]::Format("# SHA1 Finterprint: {0}", $sha1Hash)
+                            $sha256Entry = [string]::Format("# SHA256 Fingerprint: {0}", $sha256Hash)
+                            $certText = (Get-Content -Path $pemFilePath -Raw).ToString().Replace("`r`n", "`n")
+                            $rootCertEntry = "`n" + $issuerEntry + "`n" + $subjectEntry + "`n" + $labelEntry + "`n" + `
+                                $serialEntry + "`n" + $md5Entry + "`n" + $sha1Entry + "`n" + $sha256Entry + "`n" + $certText
+                            Write-CustomVerbose -Message "Adding the certificate content to Python Cert store"
+                            Add-Content "${env:ProgramFiles(x86)}\Microsoft SDKs\Azure\CLI2\Lib\site-packages\certifi\cacert.pem" $rootCertEntry -Force -ErrorAction SilentlyContinue
+                            $certifiPath = python -c "import certifi; print(certifi.where())"
+                            Add-Content "$certifiPath" $rootCertEntry
+                            Write-CustomVerbose -Message "Python Cert store was updated for allowing the Azure Stack CA root certificate"
+                            $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User") 
+                            # Set up the VM alias Endpoint for Azure CLI & Python
+                            if ($deploymentMode -eq "Online") {
+                                $vmAliasEndpoint = "https://raw.githubusercontent.com/mattmcspirit/azurestack/$branch/deployment/packages/Aliases/aliases.json"
+                            }
+                            elseif (($deploymentMode -eq "PartialOnline") -or ($deploymentMode -eq "Offline")) {
+                                $item = Get-ChildItem -Path "$azsPath\images" -Recurse -Include ("aliases.json") -ErrorAction Stop
+                                $itemName = $item.Name
+                                $itemFullPath = $item.FullName
+                                $uploadItemAttempt = 1
+                                while (!$(Get-AzureStorageBlob -Container $azsOfflineContainerName -Blob $itemName -Context $azsOfflineStorageAccount.Context -ErrorAction SilentlyContinue) -and ($uploadItemAttempt -le 3)) {
+                                    try {
+                                        # Log back into Azure Stack to ensure login hasn't timed out
+                                        Write-CustomVerbose -Message "$itemName not found. Upload Attempt: $uploadItemAttempt"
+                                        $ArmEndpoint = "https://adminmanagement.$customDomainSuffix"
+                                        Add-AzureRMEnvironment -Name "AzureStackAdmin" -ArmEndpoint "$ArmEndpoint" -ErrorAction Stop
+                                        Add-AzureRmAccount -EnvironmentName "AzureStackAdmin" -TenantId $tenantID -Credential $azsCreds -ErrorAction Stop | Out-Null
+                                        $sub = Get-AzureRmSubscription | Where-Object { $_.Name -eq "Default Provider Subscription" }
+                                        $azureContext = Get-AzureRmSubscription -SubscriptionID $sub.SubscriptionId | Select-AzureRmSubscription
+                                        Set-AzureStorageBlobContent -File "$itemFullPath" -Container $azsOfflineContainerName -Blob $itemName -Context $azsOfflineStorageAccount.Context -ErrorAction Stop | Out-Null
+                                    }
+                                    catch {
+                                        Write-CustomVerbose -Message "Upload failed."
+                                        Write-CustomVerbose -Message "$_.Exception.Message"
+                                        $uploadItemAttempt++
+                                    }
+                                }
+                                $vmAliasEndpoint = ('{0}{1}/{2}' -f $azsOfflineStorageAccount.PrimaryEndpoints.Blob, $azsOfflineContainerName, $itemName) -replace "https", "http"
+                            }
+                            Write-CustomVerbose -Message "Virtual Machine Alias Endpoint for your Azure Stack POC system = $vmAliasEndpoint"
+                            Write-CustomVerbose -Message "Configuring your Azure CLI environment on the Azure Stack POC system, for Admin and User"
+                            # Register AZ CLI environment for Admin
+                            Write-CustomVerbose -Message "Configuring for AzureStackAdmin"
+                            az cloud register -n AzureStackAdmin --endpoint-resource-manager "https://adminmanagement.$customDomainSuffix" --suffix-storage-endpoint $customDomainSuffix --suffix-keyvault-dns ".adminvault.$customDomainSuffix" --endpoint-vm-image-alias-doc $vmAliasEndpoint
+                            Write-CustomVerbose -Message "Configuring for AzureStackUser"
+                            az cloud register -n AzureStackUser --endpoint-resource-manager "https://management.$customDomainSuffix" --suffix-storage-endpoint $customDomainSuffix --suffix-keyvault-dns ".vault.$customDomainSuffix" --endpoint-vm-image-alias-doc $vmAliasEndpoint
+                            Write-CustomVerbose -Message "Setting Azure CLI active environment to AzureStackAdmin"
+                            # Set the active environment
+                            az cloud set -n AzureStackAdmin
+                            Write-CustomVerbose -Message "Updating profile for Azure CLI"
+                            # Update the profile
+                            az cloud update --profile 2019-03-01-hybrid
+
+                        }
+                        catch {
+                            Write-CustomVerbose -Message "Something went wrong configuring Azure CLI and Python. Please follow the Azure Stack docs to configure for your ASDK"
+                        }
+                    }
+                    else {
+                        Write-CustomVerbose -Message "Certificate has not been retrieved - Azure CLI and Python configuration cannot continue and will be skipped."
+                    }
+                    StageComplete -progressStage $progressStage
+                }
+                catch {
+                    StageFailed -progressStage $progressStage
+                    Set-Location $ScriptLocation
+                    return
+                }
+            }
+        }
+        elseif ($skipCustomizeAsdkHost -and ($progressCheck -ne "Complete")) {
+            StageSkipped -progressStage $progressStage
+        }
+    }
+    else {
+        # Update the AzSPoC database with skip status
+        StageSkipped -progressStage $progressStage
+    }
+
     #### CREATE ADMIN PLAN AND OFFER IN TENANT SPACE #############################################################################################################
     ##############################################################################################################################################################
 
@@ -2684,11 +2916,35 @@ C:\AzSPoC\AzSPoC.ps1, you should find the Scripts folder located at C:\AzSPoC\Sc
         Write-CustomVerbose -Message "Azure Stack POC Configurator Stage: $progressStage previously completed successfully"
     }
 
+    ### ADD VM EXTENSIONS - JOB SETUP ############################################################################################################################
+    ##############################################################################################################################################################
+
+    $jobName = "AddVMExtensions"
+    $AddVMExtensions = {
+        Start-Job -Name AddVMExtensions -InitializationScript $export_functions -ArgumentList $deploymentMode, $tenantID, $customDomainSuffix, $azsCreds, $ScriptLocation, $registerAzS, `
+            $sqlServerInstance, $databaseName, $tableName -ScriptBlock {
+            Set-Location $Using:ScriptLocation; .\Scripts\AddVMExtensions.ps1 -deploymentMode $Using:deploymentMode -tenantID $Using:TenantID -customDomainSuffix $Using:customDomainSuffix -azsCreds $Using:azsCreds `
+                -ScriptLocation $Using:ScriptLocation -registerAzS $Using:registerAzS -sqlServerInstance $Using:sqlServerInstance -databaseName $Using:databaseName `
+                -tableName $Using:tableName
+        } -Verbose -ErrorAction Stop
+    }
+    JobLauncher -jobName $jobName -jobToExecute $AddVMExtensions -Verbose
+
+    Write-CustomVerbose -Message "Wait until the VM Extensions and the VM Images have downloaded successfully...!"
+    
+    Get-Job -Name $jobName | Wait-Job
+
     ### ADD VM IMAGES - JOB SETUP ################################################################################################################################
     ##############################################################################################################################################################
 
     # This section now includes 4 key steps - Ubuntu Image, Windows Updates, Server Core Image and Server Full Image
     # They will execute serially or in parallel, depending on host capacity
+
+    $MessageBox = [System.Windows.MessageBox]::Show('Download the following Images manually: Windows Server 2016 Core and Full, Ubuntu 16.04. When all Images have downloaded click OK to continue.','Marketplace Notification','OK','Information')
+
+    Switch ($MessageBox){
+    'OK' {write-host "AzSPoC Continuing..." }
+    }
 
     $scriptStep = "LAUNCHJOBS"
     # Get current free space on the drive used to hold the Azure Stack images
@@ -2875,20 +3131,6 @@ C:\AzSPoC\AzSPoC.ps1, you should find the Scripts folder located at C:\AzSPoC\Sc
         } -Verbose -ErrorAction Stop
     }
     JobLauncher -jobName $jobName -jobToExecute $AddSQLServerAzpkg -Verbose
-
-    ### ADD VM EXTENSIONS - JOB SETUP ############################################################################################################################
-    ##############################################################################################################################################################
-
-    $jobName = "AddVMExtensions"
-    $AddVMExtensions = {
-        Start-Job -Name AddVMExtensions -InitializationScript $export_functions -ArgumentList $deploymentMode, $tenantID, $customDomainSuffix, $azsCreds, $ScriptLocation, $registerAzS, `
-            $sqlServerInstance, $databaseName, $tableName -ScriptBlock {
-            Set-Location $Using:ScriptLocation; .\Scripts\AddVMExtensions.ps1 -deploymentMode $Using:deploymentMode -tenantID $Using:TenantID -customDomainSuffix $Using:customDomainSuffix -azsCreds $Using:azsCreds `
-                -ScriptLocation $Using:ScriptLocation -registerAzS $Using:registerAzS -sqlServerInstance $Using:sqlServerInstance -databaseName $Using:databaseName `
-                -tableName $Using:tableName
-        } -Verbose -ErrorAction Stop
-    }
-    JobLauncher -jobName $jobName -jobToExecute $AddVMExtensions -Verbose
 
     ### ADD DB RPS - JOB SETUP ###################################################################################################################################
     ##############################################################################################################################################################
@@ -3267,222 +3509,6 @@ C:\AzSPoC\AzSPoC.ps1, you should find the Scripts folder located at C:\AzSPoC\Sc
 
     #### CUSTOMIZE ASDK HOST #####################################################################################################################################
     ##############################################################################################################################################################
-
-    $progressStage = "InstallHostApps"
-    $progressCheck = CheckProgress -progressStage $progressStage
-    $scriptStep = $progressStage.ToUpper()
-
-    if (($multinode -eq $false)) {
-        if ($progressCheck -eq "Complete") {
-            Write-CustomVerbose -Message "Azure Stack POC Configurator Stage: $progressStage previously completed successfully"
-        }
-        elseif (!$skipCustomizeAsdkHost -and ($progressCheck -ne "Complete")) {
-            # We first need to check if in a previous run, this section was skipped, but now, the user wants to add this, so we need to reset the progress.
-            if ($progressCheck -eq "Skipped") {
-                StageReset
-            }
-            if (($progressCheck -eq "Incomplete") -or ($progressCheck -eq "Failed")) {
-                try {
-                    if ($deploymentMode -eq "Online") {
-                        # Install useful ASDK Host Apps via Chocolatey
-                        Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
-                        # Enable Choco Global Confirmation
-                        Write-CustomVerbose -Message "Enabling global confirmation to streamline installs"
-                        choco feature enable -n allowGlobalConfirmation
-                        # Add Choco to default path
-                        $testEnvPath = $Env:path
-                        if (!($testEnvPath -contains "$env:ProgramData\chocolatey\bin")) {
-                            $Env:path = $env:path + ";$env:ProgramData\chocolatey\bin"
-                        }
-                        # Visual Studio Code
-                        Write-CustomVerbose -Message "Installing VS Code with Chocolatey"
-                        choco install vscode
-                        # Putty
-                        Write-CustomVerbose -Message "Installing Putty with Chocolatey"
-                        choco install putty.install
-                        # WinSCP
-                        Write-CustomVerbose -Message "Installing WinSCP with Chocolatey"
-                        choco install winscp.install
-                        #Edge Insider Beta
-                        Write-CustomVerbose -Message "Installing Microsoft Edge"
-                        choco install microsoft-edge
-                        # Chrome
-                        #Write-CustomVerbose -Message "Installing Chrome with Chocolatey"
-                        #choco install googlechrome
-                        # WinDirStat
-                        Write-CustomVerbose -Message "Installing WinDirStat with Chocolatey"
-                        choco install windirstat
-                        # Python
-                        Write-CustomVerbose -Message "Installing latest version of Python for Windows"
-                        choco install python3 --params "/InstallDir:C:\Python"
-                        refreshenv
-                        # Set Environment Variables
-                        [System.Environment]::SetEnvironmentVariable("PATH", "$env:Path;C:\Python;C:\Python\Scripts", "Machine")
-                        [System.Environment]::SetEnvironmentVariable("PATH", "$env:Path;C:\Python;C:\Python\Scripts", "User")
-                        # Set Current Session Variable
-                        $testEnvPath = $Env:path
-                        if (!($testEnvPath -contains "C:\Python;C:\Python\Scripts")) {
-                            $Env:path = $env:path + ";C:\Python;C:\Python\Scripts"
-                        }
-                        Write-CustomVerbose -Message "Upgrading pip"
-                        python -m ensurepip --default-pip
-                        python -m pip install -U pip
-                        refreshenv
-                        Write-CustomVerbose -Message "Installing certifi"
-                        pip install certifi
-                        refreshenv
-                        # Azure CLI
-                        Write-CustomVerbose -Message "Installing latest version of Azure CLI with Chocolatey"
-                        choco install azure-cli
-                        refreshenv
-                    }
-                    elseif ($deploymentMode -ne "Online") {
-                        $hostAppsPath = "$azsPath\hostapps"
-                        Set-Location $hostAppsPath
-                        # Visual Studio Code
-                        HostAppInstaller -localInstallPath "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe" -appName VSCode `
-                            -arguments '/SP /VERYSILENT /SUPPRESSMSGBOXES /LOG="vscode.log" /NOCANCEL /NORESTART /MERGETASKS=!runcode,addtopath,associatewithfiles,addcontextmenufolders,addcontextmenufiles,quicklaunchicon,desktopicon' `
-                            -fileName "vscode.exe" -appType "EXE"
-                        # Putty
-                        HostAppInstaller -localInstallPath "$env:ProgramFiles\PuTTY\putty.exe" -appName Putty `
-                            -arguments '/i putty.msi /qn /l*v "putty.log" ADDLOCAL=FilesFeature,DesktopFeature,PathFeature,PPKFeature' -fileName "putty.msi" -appType "MSI"
-                        # WinSCP
-                        HostAppInstaller -localInstallPath "$env:ProgramFiles\WinSCP\WinSCP.exe" -appName WinSCP `
-                            -arguments '/SP /VERYSILENT /SUPPRESSMSGBOXES /LOG="WinSCP.log" /NOCANCEL /NORESTART' -fileName "WinSCP.exe" -appType "EXE"
-                        # Chrome
-                        HostAppInstaller -localInstallPath "${Env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe" -appName "Google Chrome" `
-                            -arguments '/i googlechrome.msi /qn /l*v "googlechrome.log"' -fileName "googlechrome.msi" -appType "MSI"
-                        # WinDirStat
-                        HostAppInstaller -localInstallPath "${Env:ProgramFiles(x86)}\WinDirStat\WinDirStat.exe" -appName WinDirStat `
-                            -arguments '/S /VERYSILENT /SUPPRESSMSGBOXES /LOG="WinDirStat.log" /NOCANCEL /NORESTART' `
-                            -fileName "windirstat.exe" -appType "EXE"
-                        # Python
-                        HostAppInstaller -localInstallPath "C:\Python\Python.exe" -appName Python `
-                            -arguments '/quiet InstallAllUsers=1 PrependPath=1 TargetDir=c:\Python' -fileName "python3.exe" -appType "EXE"
-                        # Set Environment Variables
-                        [System.Environment]::SetEnvironmentVariable("PATH", "$env:Path;C:\Python;C:\Python\Scripts", "Machine")
-                        [System.Environment]::SetEnvironmentVariable("PATH", "$env:Path;C:\Python;C:\Python\Scripts", "User")
-                        # Set Current Session Variable
-                        $testEnvPath = $Env:path
-                        if (!($testEnvPath -contains "C:\Python;C:\Python\Scripts")) {
-                            $Env:path = $env:path + ";C:\Python;C:\Python\Scripts"
-                        }
-                        Write-CustomVerbose -Message "Upgrading pip"
-                        $pipWhl = (Get-ChildItem -Path .\* -Include "pip*.whl" -Force -Verbose -ErrorAction Stop).Name
-                        python -m pip install --no-index $pipWhl
-                        #python -m ensurepip --default-pip
-                        Write-CustomVerbose -Message "Installing certifi"
-                        # pip install certifi
-                        $certifiWhl = (Get-ChildItem -Path .\* -Include "certifi*.whl" -Force -Verbose -ErrorAction Stop).Name
-                        pip install --no-index $certifiWhl
-                        # Azure CLI
-                        HostAppInstaller -localInstallPath "${Env:ProgramFiles(x86)}\Microsoft SDKs\Azure\CLI2\wbin" -appName "Azure CLI" `
-                            -arguments '/i azurecli.msi /qn /norestart /l*v "azurecli.log"' -fileName "azurecli.msi" -appType "MSI"
-                    }
-                    # Configure Python & Azure CLI Certs
-                    Write-CustomVerbose -Message "Retrieving Azure Stack Root Authority certificate..." -Verbose
-                    $label = "AzureStackSelfSignedRootCert"
-                    $cert = Get-ChildItem Cert:\CurrentUser\Root | Where-Object Subject -eq "CN=$label" -ErrorAction SilentlyContinue | Select-Object -First 1
-                    if ($cert) {
-                        try {
-                            New-Item -Path "$env:userprofile\desktop\Certs" -ItemType Directory -Force | Out-Null
-                            $certFileName = "$env:computername" + "-CA.cer"
-                            $certFilePath = "$env:userprofile\desktop\Certs\$certFileName"
-                            Write-CustomVerbose -Message "Saving Azure Stack Root certificate in $certFilePath..." -Verbose
-                            Export-Certificate -Cert $cert -FilePath $certFilePath -Force | Out-Null
-                            Write-CustomVerbose -Message "Converting certificate to PEM format"
-                            Set-Location "$env:userprofile\desktop\Certs"
-                            $pemFileName = $certFileName -replace ".cer", ".pem"
-                            certutil.exe -encode $certFileName $pemFileName
-                            $pemFilePath = "$env:userprofile\desktop\Certs\$pemFileName"
-                            $root = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
-                            $root.Import($pemFilePath)
-                            Write-CustomVerbose -Message "Extracting required information from the cert file"
-                            $md5Hash = (Get-FileHash -Path $pemFilePath -Algorithm MD5).Hash.ToLower()
-                            $sha1Hash = (Get-FileHash -Path $pemFilePath -Algorithm SHA1).Hash.ToLower()
-                            $sha256Hash = (Get-FileHash -Path $pemFilePath -Algorithm SHA256).Hash.ToLower()
-                            $issuerEntry = [string]::Format("# Issuer: {0}", $root.Issuer)
-                            $subjectEntry = [string]::Format("# Subject: {0}", $root.Subject)
-                            $labelEntry = [string]::Format("# Label: {0}", $root.Subject.Split('=')[-1])
-                            $serialEntry = [string]::Format("# Serial: {0}", $root.GetSerialNumberString().ToLower())
-                            $md5Entry = [string]::Format("# MD5 Fingerprint: {0}", $md5Hash)
-                            $sha1Entry = [string]::Format("# SHA1 Finterprint: {0}", $sha1Hash)
-                            $sha256Entry = [string]::Format("# SHA256 Fingerprint: {0}", $sha256Hash)
-                            $certText = (Get-Content -Path $pemFilePath -Raw).ToString().Replace("`r`n", "`n")
-                            $rootCertEntry = "`n" + $issuerEntry + "`n" + $subjectEntry + "`n" + $labelEntry + "`n" + `
-                                $serialEntry + "`n" + $md5Entry + "`n" + $sha1Entry + "`n" + $sha256Entry + "`n" + $certText
-                            Write-CustomVerbose -Message "Adding the certificate content to Python Cert store"
-                            Add-Content "${env:ProgramFiles(x86)}\Microsoft SDKs\Azure\CLI2\Lib\site-packages\certifi\cacert.pem" $rootCertEntry -Force -ErrorAction SilentlyContinue
-                            $certifiPath = python -c "import certifi; print(certifi.where())"
-                            Add-Content "$certifiPath" $rootCertEntry
-                            Write-CustomVerbose -Message "Python Cert store was updated for allowing the Azure Stack CA root certificate"
-                            $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User") 
-                            # Set up the VM alias Endpoint for Azure CLI & Python
-                            if ($deploymentMode -eq "Online") {
-                                $vmAliasEndpoint = "https://raw.githubusercontent.com/mattmcspirit/azurestack/$branch/deployment/packages/Aliases/aliases.json"
-                            }
-                            elseif (($deploymentMode -eq "PartialOnline") -or ($deploymentMode -eq "Offline")) {
-                                $item = Get-ChildItem -Path "$azsPath\images" -Recurse -Include ("aliases.json") -ErrorAction Stop
-                                $itemName = $item.Name
-                                $itemFullPath = $item.FullName
-                                $uploadItemAttempt = 1
-                                while (!$(Get-AzureStorageBlob -Container $azsOfflineContainerName -Blob $itemName -Context $azsOfflineStorageAccount.Context -ErrorAction SilentlyContinue) -and ($uploadItemAttempt -le 3)) {
-                                    try {
-                                        # Log back into Azure Stack to ensure login hasn't timed out
-                                        Write-CustomVerbose -Message "$itemName not found. Upload Attempt: $uploadItemAttempt"
-                                        $ArmEndpoint = "https://adminmanagement.$customDomainSuffix"
-                                        Add-AzureRMEnvironment -Name "AzureStackAdmin" -ArmEndpoint "$ArmEndpoint" -ErrorAction Stop
-                                        Add-AzureRmAccount -EnvironmentName "AzureStackAdmin" -TenantId $tenantID -Credential $azsCreds -ErrorAction Stop | Out-Null
-                                        $sub = Get-AzureRmSubscription | Where-Object { $_.Name -eq "Default Provider Subscription" }
-                                        $azureContext = Get-AzureRmSubscription -SubscriptionID $sub.SubscriptionId | Select-AzureRmSubscription
-                                        Set-AzureStorageBlobContent -File "$itemFullPath" -Container $azsOfflineContainerName -Blob $itemName -Context $azsOfflineStorageAccount.Context -ErrorAction Stop | Out-Null
-                                    }
-                                    catch {
-                                        Write-CustomVerbose -Message "Upload failed."
-                                        Write-CustomVerbose -Message "$_.Exception.Message"
-                                        $uploadItemAttempt++
-                                    }
-                                }
-                                $vmAliasEndpoint = ('{0}{1}/{2}' -f $azsOfflineStorageAccount.PrimaryEndpoints.Blob, $azsOfflineContainerName, $itemName) -replace "https", "http"
-                            }
-                            Write-CustomVerbose -Message "Virtual Machine Alias Endpoint for your Azure Stack POC system = $vmAliasEndpoint"
-                            Write-CustomVerbose -Message "Configuring your Azure CLI environment on the Azure Stack POC system, for Admin and User"
-                            # Register AZ CLI environment for Admin
-                            Write-CustomVerbose -Message "Configuring for AzureStackAdmin"
-                            az cloud register -n AzureStackAdmin --endpoint-resource-manager "https://adminmanagement.$customDomainSuffix" --suffix-storage-endpoint $customDomainSuffix --suffix-keyvault-dns ".adminvault.$customDomainSuffix" --endpoint-vm-image-alias-doc $vmAliasEndpoint
-                            Write-CustomVerbose -Message "Configuring for AzureStackUser"
-                            az cloud register -n AzureStackUser --endpoint-resource-manager "https://management.$customDomainSuffix" --suffix-storage-endpoint $customDomainSuffix --suffix-keyvault-dns ".vault.$customDomainSuffix" --endpoint-vm-image-alias-doc $vmAliasEndpoint
-                            Write-CustomVerbose -Message "Setting Azure CLI active environment to AzureStackAdmin"
-                            # Set the active environment
-                            az cloud set -n AzureStackAdmin
-                            Write-CustomVerbose -Message "Updating profile for Azure CLI"
-                            # Update the profile
-                            az cloud update --profile 2019-03-01-hybrid
-                        }
-                        catch {
-                            Write-CustomVerbose -Message "Something went wrong configuring Azure CLI and Python. Please follow the Azure Stack docs to configure for your ASDK"
-                        }
-                    }
-                    else {
-                        Write-CustomVerbose -Message "Certificate has not been retrieved - Azure CLI and Python configuration cannot continue and will be skipped."
-                    }
-                    StageComplete -progressStage $progressStage
-                }
-                catch {
-                    StageFailed -progressStage $progressStage
-                    Set-Location $ScriptLocation
-                    return
-                }
-            }
-        }
-        elseif ($skipCustomizeAsdkHost -and ($progressCheck -ne "Complete")) {
-            StageSkipped -progressStage $progressStage
-        }
-    }
-    else {
-        # Update the AzSPoC database with skip status
-        StageSkipped -progressStage $progressStage
-    }
         
     Write-Host "Clearing previous Azure/Azure Stack logins"
     Get-AzureRmContext -ListAvailable | Where-Object { $_.Environment -like "Azure*" } | Remove-AzureRmAccount | Out-Null
