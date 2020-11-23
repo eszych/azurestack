@@ -40,6 +40,16 @@
     * Supports usage in offline/disconnected environments
 
 .VERSION
+    2008.1  2002.1 bits from Matt McSpirit and changed the following
+            HostApps will be installed first
+            The following VM Images will be downloaded from Azure Marketplace - Skript will wait until all Images are downloaded!
+            * Windows Server 2016 Datacenter smalldisk BYOL
+            * Windows Server 2016 Datacenter core smalldisk BYOL
+            * Windows Server 2019 Datacenter smalldisk BYOL
+            * Windows Server 2019 Datacenter core smalldisk BYOL
+            * Ubuntu Ubuntu Server 16.04 LTS
+            * AKS Base Ubuntu 16.04-LTS Image Distro, March 2020 
+
     2002.1  AVMA fix
             Database Timeout RP fix
     2002    Improved Windows Update download process
@@ -148,6 +158,12 @@
     Blog: http://www.mattmcspirit.com
     Email: matt.mcspirit@microsoft.com 
     Twitter: @mattmcspirit
+
+.Changes by
+
+    Elmar Szych
+    Email: elmar.szych@dell.com 
+    Twitter: @El_Zisch
 
 .CREDITS
 
@@ -622,13 +638,13 @@ try {
         $ubuntuNetTest = Test-NetConnection cloud-images.ubuntu.com -CommonTCPPort HTTP -InformationLevel Quiet
         $catalogNetTest = Test-NetConnection www.catalog.update.microsoft.com -CommonTCPPort HTTP -InformationLevel Quiet
         $microsoftNetTest = Test-NetConnection microsoft.com -CommonTCPPort HTTP -InformationLevel Quiet
-        # $chocolateyNetTest = Test-NetConnection chocolatey.org -CommonTCPPort HTTP -InformationLevel Quiet
+        $chocolateyNetTest = Test-NetConnection chocolatey.org -CommonTCPPort HTTP -InformationLevel Quiet
         Write-CustomVerbose -Message "Connection to Azure: $azureNetTest"
         Write-CustomVerbose -Message "Connection to Microsoft.com: $microsoftNetTest"
         Write-CustomVerbose -Message "Connection to Microsoft Update Catalog: $catalogNetTest"
         Write-CustomVerbose -Message "Connection to GitHub: $gitHubNetTest"
         Write-CustomVerbose -Message "Connection to Ubuntu's Image Repo: $ubuntuNetTest"
-        # Write-CustomVerbose -Message "Connection to Chocolatey: $chocolateyNetTest"
+        Write-CustomVerbose -Message "Connection to Chocolatey: $chocolateyNetTest"
 
         # if ($azureNetTest -and $gitHubNetTest -and $ubuntuNetTest -and $catalogNetTest -and $microsoftNetTest -and $chocolateyNetTest) {
         if ($azureNetTest -and $gitHubNetTest -and $ubuntuNetTest -and $catalogNetTest -and $microsoftNetTest) {
@@ -804,7 +820,8 @@ try {
     # Validate Github branch exists - usually reserved for testing purposes
     if ($deploymentMode -eq "Online") {
         try {
-            $urlToTest = "https://raw.githubusercontent.com/mattmcspirit/azurestack/$branch/README.md"
+            # $urlToTest = "https://raw.githubusercontent.com/mattmcspirit/azurestack/$branch/README.md"
+            $urlToTest = "https://raw.githubusercontent.com/eszych/azurestack/$branch/README.md"
             [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
             $statusCode = Invoke-WebRequest "$urlToTest" -UseBasicParsing -ErrorAction SilentlyContinue | ForEach-Object { $_.StatusCode } -ErrorAction SilentlyContinue
             if ($statusCode -eq 200) {
@@ -1862,7 +1879,8 @@ try {
             if ($deploymentMode -eq "Online") {
                 # If this is an online deployment, pull down the PowerShell scripts from GitHub
                 foreach ($script in $scriptArray) {
-                    $scriptBaseURI = "https://raw.githubusercontent.com/mattmcspirit/azurestack/$branch/deployment/powershell"
+                    # $scriptBaseURI = "https://raw.githubusercontent.com/mattmcspirit/azurestack/$branch/deployment/powershell"
+                    $scriptBaseURI = "https://raw.githubusercontent.com/eszych/azurestack/$branch/deployment/powershell"
                     $scriptDownloadPath = "$scriptPath\$script"
                     DownloadWithRetry -downloadURI "$scriptBaseURI/$script" -downloadLocation $scriptDownloadPath -retries 10
                 }
@@ -2693,7 +2711,8 @@ C:\AzSPoC\AzSPoC.ps1, you should find the Scripts folder located at C:\AzSPoC\Sc
                             $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User") 
                             # Set up the VM alias Endpoint for Azure CLI & Python
                             if ($deploymentMode -eq "Online") {
-                                $vmAliasEndpoint = "https://raw.githubusercontent.com/mattmcspirit/azurestack/$branch/deployment/packages/Aliases/aliases.json"
+                                # $vmAliasEndpoint = "https://raw.githubusercontent.com/mattmcspirit/azurestack/$branch/deployment/packages/Aliases/aliases.json"
+                                $vmAliasEndpoint = "https://raw.githubusercontent.com/eszych/azurestack/$branch/deployment/packages/Aliases/aliases.json"
                             }
                             elseif (($deploymentMode -eq "PartialOnline") -or ($deploymentMode -eq "Offline")) {
                                 $item = Get-ChildItem -Path "$azsPath\images" -Recurse -Include ("aliases.json") -ErrorAction Stop

@@ -5,6 +5,19 @@ Version History
 -----------
 Here you'll find information on key changes, bug fixes and improvements made by version.
 
+### What's new in this version
+* 2002.1 bits from Matt McSpirit and changed the following
+* HostApps will be installed first
+* The following VM Images will be downloaded from Azure Marketplace - Skript will wait until all Images are downloaded!
+  * Windows Server 2016 Datacenter smalldisk BYOL
+  * Windows Server 2016 Datacenter core smalldisk BYOL
+  * Windows Server 2019 Datacenter smalldisk BYOL
+  * Windows Server 2019 Datacenter core smalldisk BYOL
+  * Ubuntu Ubuntu Server 16.04 LTS
+  * AKS Base Ubuntu 16.04-LTS Image Distro, March 2020 
+
+
+
 ### What's new in version 2002.1?
 * AVMA fix
 * Database Timeout RP fix
