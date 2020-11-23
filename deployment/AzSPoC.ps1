@@ -2950,8 +2950,10 @@ C:\AzSPoC\AzSPoC.ps1, you should find the Scripts folder located at C:\AzSPoC\Sc
     JobLauncher -jobName $jobName -jobToExecute $AddVMExtensions -Verbose
 
     Write-CustomVerbose -Message "Wait until the VM Extensions and the VM Images have downloaded successfully...!"
-    
     Get-Job -Name $jobName | Wait-Job
+
+    $progressStage = "AddVMExtensions"
+    StageComplete -progressStage $progressStage
 
     ### ADD VM IMAGES - JOB SETUP ################################################################################################################################
     ##############################################################################################################################################################
@@ -2959,12 +2961,42 @@ C:\AzSPoC\AzSPoC.ps1, you should find the Scripts folder located at C:\AzSPoC\Sc
     # This section now includes 4 key steps - Ubuntu Image, Windows Updates, Server Core Image and Server Full Image
     # They will execute serially or in parallel, depending on host capacity
 
-    $MessageBox = [System.Windows.MessageBox]::Show('Download the following Images manually: Windows Server 2016 Core and Full, Ubuntu 16.04. When all Images have downloaded click OK to continue.','Marketplace Notification','OK','Information')
-
-    Switch ($MessageBox){
-    'OK' {write-host "AzSPoC Continuing..." }
+    # Log into Azure Stack to check for existing images ###
+    Write-Host "Check if Images exist..."
+    $ArmEndpoint = "https://adminmanagement.$customDomainSuffix"
+    Add-AzureRMEnvironment -Name "AzureStackAdmin" -ArmEndpoint "$ArmEndpoint" -ErrorAction Stop
+    Add-AzureRmAccount -EnvironmentName "AzureStackAdmin" -TenantId $TenantID -Credential $azsCreds -ErrorAction Stop | Out-Null
+    $sub = Get-AzureRmSubscription | Where-Object { $_.Name -eq "Default Provider Subscription" }
+    $azureContext = Get-AzureRmSubscription -SubscriptionID $sub.SubscriptionId | Select-AzureRmSubscription
+    $azsLocation = (Get-AzureRmLocation).DisplayName
+    
+    if ($(Get-AzsPlatformImage -Location $azsLocation -ErrorAction SilentlyContinue) | Where-Object {($_.ProvisioningState -eq "Failed") -or ($_.ProvisioningState -eq "Canceled")}) {
+        Write-Host "There appears to be at least 1 suitable VM image within your Platform Image Repository in a failed or canceled state"
+        $MessageBox = [System.Windows.MessageBox]::Show('Check that all VM Images *Windows Server 2016 & 2019 Core and Full, Ubuntu 16.04, AKS Ubuntu) have been Download from the Marketplace. Click to continue.','Marketplace Notification','OK','Information')
+        Switch ($MessageBox){
+            'OK' {write-host "AzSPoC Continuing..." }
+        }
     }
 
+    $progressStage = "WindowsUpdates"
+    StageComplete -progressStage $progressStage
+    
+    $progressStage = "UbuntuServerImage"
+    StageComplete -progressStage $progressStage
+
+    $progressStage = "ServerCore2016Image"
+    StageComplete -progressStage $progressStage
+
+    $progressStage = "ServerFull2016Image"
+    StageComplete -progressStage $progressStage
+
+    $progressStage = "ServerCore2019Image"
+    StageComplete -progressStage $progressStage
+
+    $progressStage = "ServerFull2019Image"
+    StageComplete -progressStage $progressStage
+    
+    <##############################################################################################################################################################
     $scriptStep = "LAUNCHJOBS"
     # Get current free space on the drive used to hold the Azure Stack images
     if (($multinode -eq $false)) {
@@ -3113,6 +3145,9 @@ C:\AzSPoC\AzSPoC.ps1, you should find the Scripts folder located at C:\AzSPoC\Sc
         } -Verbose -ErrorAction Stop
     }
     JobLauncher -jobName $jobName -jobToExecute $AddServerFull2019Image -Verbose
+
+    ######################################################################################################################################################################>
+
 
     ### ADD DB GALLERY ITEMS - JOB SETUP #########################################################################################################################
     ##############################################################################################################################################################
@@ -3363,6 +3398,7 @@ C:\AzSPoC\AzSPoC.ps1, you should find the Scripts folder located at C:\AzSPoC\Sc
     Add-AzureRmAccount -EnvironmentName "AzureStackAdmin" -TenantId $tenantID -Credential $azsCreds -ErrorAction Stop | Out-Null
     $sub = Get-AzureRmSubscription | Where-Object { $_.Name -eq "Default Provider Subscription" }
     $azureContext = Get-AzureRmSubscription -SubscriptionID $sub.SubscriptionId | Select-AzureRmSubscription
+
     $progressStage = "RegisterNewRPs"
     $progressCheck = CheckProgress -progressStage $progressStage
     $scriptStep = $progressStage.ToUpper()
