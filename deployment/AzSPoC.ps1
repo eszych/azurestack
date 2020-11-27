@@ -2571,7 +2571,6 @@ C:\AzSPoC\AzSPoC.ps1, you should find the Scripts folder located at C:\AzSPoC\Sc
             if (($progressCheck -eq "Incomplete") -or ($progressCheck -eq "Failed")) {
                 try {
                     if ($deploymentMode -eq "Online") {
-                        <##########
                         # Install useful ASDK Host Apps via Chocolatey
                         Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
                         # Enable Choco Global Confirmation
@@ -2603,7 +2602,6 @@ C:\AzSPoC\AzSPoC.ps1, you should find the Scripts folder located at C:\AzSPoC\Sc
                         # Python
                         Write-CustomVerbose -Message "Installing latest version of Python for Windows"
                         choco install python3 --params "/InstallDir:C:\Python" -f
-                        ##########> 
                         refreshenv
                         # Set Environment Variables
                         [System.Environment]::SetEnvironmentVariable("PATH", "$env:Path;C:\Python;C:\Python\Scripts", "Machine")
@@ -2626,7 +2624,6 @@ C:\AzSPoC\AzSPoC.ps1, you should find the Scripts folder located at C:\AzSPoC\Sc
                         refreshenv
                     }
                     elseif ($deploymentMode -ne "Online") {
-                        <##########
                         $hostAppsPath = "$azsPath\hostapps"
                         Set-Location $hostAppsPath
                         # Visual Studio Code
@@ -2654,7 +2651,6 @@ C:\AzSPoC\AzSPoC.ps1, you should find the Scripts folder located at C:\AzSPoC\Sc
                         [System.Environment]::SetEnvironmentVariable("PATH", "$env:Path;C:\Python;C:\Python\Scripts", "User")
                         # Set Current Session Variable
                         $testEnvPath = $Env:path
-                        ##########>
                         if (!($testEnvPath -contains "C:\Python;C:\Python\Scripts")) {
                             $Env:path = $env:path + ";C:\Python;C:\Python\Scripts"
                         }

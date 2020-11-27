@@ -9,8 +9,7 @@ if (!$AzSPoCSqlLoginExists) {
     $sqlLocalDbAdmin = "azspocadmin"
     $sqlLocalDbCreds = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $sqlLocalDbAdmin, $secureVMpwd -ErrorAction Stop
     Add-SqlLogin -ServerInstance $sqlServerInstance -LoginName "azspocadmin" -LoginPSCredential $sqlLocalDbCreds -LoginType SqlLogin -DefaultDatabase "AzSPoC" -Enable -GrantConnectSql -ErrorAction SilentlyContinue -Verbose:$false
-}
-else {
+} else {
     Write-Host "The AzSPoC Admin Login already exists. No need to recreate."
 }
 
@@ -18,7 +17,7 @@ Invoke-Sqlcmd -ServerInstance $sqlServerInstance -Database AzSPoC -Query "SELECT
 Invoke-Sqlcmd -ServerInstance $sqlServerInstance -Database AzSPoC -Query "SELECT st.name AS TableName, sc.name AS ColumnName FROM sys.tables AS st INNER JOIN sys.columns sc ON st.OBJECT_ID = sc.OBJECT_ID ORDER BY st.name, sc.name"
 
 Invoke-Sqlcmd -ServerInstance $sqlServerInstance -Database AzSPoC -Query "SELECT * FROM Progress"
-Invoke-Sqlcmd -ServerInstance $sqlServerInstance -Database AzSPoC -Query "UPDATE Progress SET GetScripts ='Incomplete'"
+Invoke-Sqlcmd -ServerInstance $sqlServerInstance -Database AzSPoC -Query "UPDATE Progress SET SQLServerGalleryItem ='Incomplete'"
 Invoke-Sqlcmd -ServerInstance $sqlServerInstance -Database AzSPoC -Query "SELECT UbuntuServerImage FROM Progress"
 
 
@@ -43,9 +42,9 @@ $progressHashTable = [ordered]@{
     ServerFull2016Image  = "Complete";
     ServerCore2019Image  = "Complete";
     ServerFull2019Image  = "Complete";
-    MySQL57GalleryItem   = "Incomplete";
-    MySQL80GalleryItem   = "Incomplete";
-    SQLServerGalleryItem = "Incomplete";
+    MySQL57GalleryItem   = "Complete";
+    MySQL80GalleryItem   = "Complete";
+    SQLServerGalleryItem = "Complete";
     AddVMExtensions      = "Complete";
     MySQLRP              = "Incomplete";
     SQLServerRP          = "Incomplete";
@@ -61,10 +60,10 @@ $progressHashTable = [ordered]@{
     DownloadAppService   = "Incomplete";
     AddAppServicePreReqs = "Incomplete";
     DeployAppService     = "Incomplete";
-    RegisterNewRPs       = "Incomplete";
-    UserPlanOffer        = "Incomplete";
+    RegisterNewRPs       = "Complete";
+    UserPlanOffer        = "Complete";
     InstallHostApps      = "Complete";
-    CreateOutput         = "Incomplete";
+    CreateOutput         = "Complete";
 }
 
 $progressHashTable.ForEach( { $_.ForEach( { [PSCustomObject]$_ }) }) | Format-Table
